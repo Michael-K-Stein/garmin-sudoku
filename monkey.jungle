@@ -1,0 +1,17 @@
+project.manifest = manifest.xml
+base.sourcePath = source
+base.resourcePath = resources
+
+# The launcher slot is a different size on nearly every watch, so each
+# product gets its own icon resource folder, drawn at that device's exact
+# size by tools/make_icons.py during the build. A single scaled icon looks
+# scaled, and Connect IQ has a mechanism for exactly this.
+venu2.resourcePath = $(venu2.resourcePath);resources-icon/venu2
+venu2s.resourcePath = $(venu2s.resourcePath);resources-icon/venu2s
+venu2plus.resourcePath = $(venu2plus.resourcePath);resources-icon/venu2plus
+venu3.resourcePath = $(venu3.resourcePath);resources-icon/venu3
+venu3s.resourcePath = $(venu3s.resourcePath);resources-icon/venu3s
+vivoactive4.resourcePath = $(vivoactive4.resourcePath);resources-icon/vivoactive4
+vivoactive5.resourcePath = $(vivoactive5.resourcePath);resources-icon/vivoactive5
+fr265.resourcePath = $(fr265.resourcePath);resources-icon/fr265
+fr965.resourcePath = $(fr965.resourcePath);resources-icon/fr965
