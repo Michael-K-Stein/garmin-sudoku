@@ -89,7 +89,7 @@ fi
 # The compiler validates the whole manifest against this folder, so building
 # one device with configs for one device means eight "invalid device id"
 # warnings that are not telling you anything.
-mapfile -t products < <("$PYTHON" - "$ROOT/manifest.xml" <<'PY'
+mapfile -t products < <("$PYTHON" - "$ROOT/manifest.xml" <<'PY' | tr -d '\r'
 import sys, xml.etree.ElementTree as ET
 ns = {"iq": "http://www.garmin.com/xml/connectiq"}
 for p in ET.parse(sys.argv[1]).getroot().iter("{%s}product" % ns["iq"]):
