@@ -13,6 +13,23 @@ using Toybox.Lang;
 //! test in `Generator` affordable.
 class Solver {
 
+    // A backtracking search proving a sparse grid has NO alternate solution
+    // has to exhaust the whole tree to be sure - there is no early exit for
+    // "unique" the way there is for "found one". That case is common and
+    // expensive during Generator's dig phase as the puzzle empties out, and
+    // it runs synchronously inside a single timer tick, so `stillUnique`'s
+    // existence check needs its own bound rather than trusting the watchdog
+    // to catch it. Past the budget the search is abandoned and treated as
+    // "found a solution" - the safe direction, since it only ever makes the
+    // generator keep a clue it might not have strictly needed, never ship a
+    // puzzle with more than one solution.
+    //
+    // `solveFirst` must NOT use this budget: it needs an actual solution
+    // (buildSolved() depends on getting one back), not an early bailout, so
+    // it always searches with NO_BUDGET.
+    static const NODE_BUDGET = 30;
+    static const NO_BUDGET = -1;
+
     hidden var work as Lang.Array<Lang.Number>;          // the grid being searched
     hidden var rows as Lang.Array<Lang.Number>;
     hidden var cols as Lang.Array<Lang.Number>;
@@ -76,8 +93,11 @@ class Solver {
     }
 
     //! How many solutions `grid` has, counted up to `limit`. Returns 0 for a
-    //! grid whose givens already contradict each other.
-    function count(grid as Lang.Array<Lang.Number>, limit as Lang.Number) as Lang.Number {
+    //! grid whose givens already contradict each other. `budget` caps how
+    //! many placements the search will try before giving up and reporting
+    //! `limit` (i.e. "assume not unique") - pass `NO_BUDGET` for an
+    //! exhaustive, uncapped search.
+    function count(grid as Lang.Array<Lang.Number>, limit as Lang.Number, budget as Lang.Number) as Lang.Number {
         for (var u = 0; u < 9; u++) {
             rows[u] = 0;
             cols[u] = 0;
@@ -131,6 +151,7 @@ class Solver {
             place(cell, d);
             trailPut[depth] = d;
             nodes++;
+            if (budget != NO_BUDGET && nodes >= budget) { return found > 0 ? found : limit; }
 
             var next = choose();
             if (next == -2) { continue; }      // dead end; next digit
@@ -150,12 +171,12 @@ class Solver {
 
     //! The first solution of `grid`, or null if it has none.
     function solveFirst(grid as Lang.Array<Lang.Number>) as Lang.Array<Lang.Number>? {
-        count(grid, 1);
+        count(grid, 1, NO_BUDGET);
         return solution;
     }
 
     //! True when `grid` has exactly one solution.
     function isUnique(grid as Lang.Array<Lang.Number>) as Lang.Boolean {
-        return count(grid, 2) == 1;
+        return count(grid, 2, NO_BUDGET) == 1;
     }
 }
