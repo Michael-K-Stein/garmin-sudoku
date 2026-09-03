@@ -65,7 +65,7 @@ mkdir -p "$DIST"
 # The product list comes from the manifest rather than being repeated here.
 # A store package has to cover exactly what the manifest declares, and a
 # second hand-maintained list is a second thing to forget to update.
-mapfile -t PACKAGE_TARGETS < <("$PYTHON" - "$ROOT/manifest.xml" <<'PY'
+mapfile -t PACKAGE_TARGETS < <("$PYTHON" - "$ROOT/manifest.xml" <<'PY' | tr -d '\r'
 import sys, xml.etree.ElementTree as ET
 NS = "http://www.garmin.com/xml/connectiq"
 for p in ET.parse(sys.argv[1]).getroot().iter("{%s}product" % NS):
