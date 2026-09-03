@@ -97,7 +97,7 @@ function testSolverSolvesAndCounts(logger as Test.Logger) as Lang.Boolean {
         for (var k = 0; k < 9; k++) { mask |= Bits.of(solved[Cells.unitCell(u, k)]); }
         if (mask != Bits.ALL) { return false; }
     }
-    return solver.count(easy, 2) == 1;
+    return solver.count(easy, 2, Solver.NO_BUDGET) == 1;
 }
 
 (:test)
@@ -108,17 +108,17 @@ function testSolverRejectsAndDetectsAmbiguity(logger as Test.Logger) as Lang.Boo
     // should say so without searching.
     var broken = Fixture.parse(Fixture.EASY);
     broken[1] = 5;
-    if (solver.count(broken, 2) != 0) { return false; }
+    if (solver.count(broken, 2, Solver.NO_BUDGET) != 0) { return false; }
 
     // One clue short of the real board leaves more than one answer.
-    return solver.count(Fixture.parse(Fixture.AMBIGUOUS), 2) == 2;
+    return solver.count(Fixture.parse(Fixture.AMBIGUOUS), 2, Solver.NO_BUDGET) == 2;
 }
 
 (:test)
 function testSolverHandlesTheHardestBoard(logger as Test.Logger) as Lang.Boolean {
     // 21 clues. If the iterative trail is wrong at any depth this is where it
     // shows, because this board makes the search go deep.
-    return new Solver().count(Fixture.parse(Fixture.EXTREME), 2) == 1;
+    return new Solver().count(Fixture.parse(Fixture.EXTREME), 2, Solver.NO_BUDGET) == 1;
 }
 
 //! The single question the whole tier table rests on.

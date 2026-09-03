@@ -45,7 +45,7 @@ module Gen {
             if (mask != Bits.ALL) { return false; }
         }
         // A puzzle with two answers is not a puzzle.
-        return new Solver().count(puzzle, 2) == 1;
+        return new Solver().count(puzzle, 2, Solver.NO_BUDGET) == 1;
     }
 }
 
