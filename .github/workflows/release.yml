@@ -1,0 +1,70 @@
+name: release
+
+# Pushing a version tag (v1.2.3) builds the signed, multi-device .iq the
+# Connect IQ Store takes and attaches it to a new GitHub Release. The Store
+# itself has no upload API, so this is as far as automation goes - grab the
+# .iq from the release and upload it through the Store's own console.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write   # to create the release and upload its asset
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # Shared with the build workflow's cache - same key, same repo, so a
+      # tag pushed right after a branch build reuses what's already warm.
+      - name: Cache the Connect IQ SDK
+        uses: actions/cache@v4
+        with:
+          path: dist/sdk
+          key: connectiq-sdk-${{ hashFiles('tools/build.sh') }}
+
+      - name: Check the code against its own invariants
+        run: tools/verify.sh
+
+      # The Store binds an app to whichever key first uploaded it, so this
+      # has to be the one real developer key, not a throwaway one build.sh
+      # would otherwise generate. tools/package.sh refuses to run without a
+      # key already at this path, which is what stops that substitution from
+      # happening silently.
+      - name: Restore the developer key
+        run: |
+          mkdir -p dist
+          echo "${{ secrets.CIQ_DEVELOPER_KEY_B64 }}" | base64 -d > dist/developer_key.der
+
+      - name: Build for the Venu 2 family
+        run: tools/build.sh --fetch-sdk
+
+      # The build already runs with --warn; this fails the job on a warning,
+      # which is the only way "compiles clean" stays true.
+      - name: Fail on any compiler warning
+        run: |
+          tools/build.sh 2>&1 | tee dist/build.log
+          if grep -q "^WARNING" dist/build.log; then
+            echo "::error::the build produced warnings"
+            grep "^WARNING" dist/build.log
+            exit 1
+          fi
+
+      - name: Compile the unit tests
+        run: tools/test.sh
+
+      - name: Package the store release
+        run: tools/package.sh
+
+      - name: Publish the GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/Sudoku.iq
+          generate_release_notes: true
