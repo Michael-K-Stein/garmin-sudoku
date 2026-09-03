@@ -105,7 +105,14 @@ class WinDelegate extends WatchUi.BehaviorDelegate {
         return true;
     }
 
-    function onSelect() {
+    //! onKey, not onSelect: a real screen tap also fires the select
+    //! behaviour with no coordinates, so an onSelect override here would run
+    //! again() a second time right after onTap on real Venu 2 hardware.
+    //! onKey(KEY_ENTER) is reached only by the physical select button.
+    function onKey(event as WatchUi.KeyEvent) {
+        if (event.getKey() != WatchUi.KEY_ENTER) {
+            return false;
+        }
         again();
         return true;
     }

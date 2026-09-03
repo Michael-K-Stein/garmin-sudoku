@@ -88,7 +88,14 @@ class HelpDelegate extends WatchUi.BehaviorDelegate {
         return true;
     }
 
-    function onSelect() {
+    //! onKey, not onSelect: a real screen tap also fires the select
+    //! behaviour with no coordinates, so an onSelect override here would
+    //! advance the page a second time right after onTap on real Venu 2
+    //! hardware. onKey(KEY_ENTER) is reached only by the physical button.
+    function onKey(event as WatchUi.KeyEvent) {
+        if (event.getKey() != WatchUi.KEY_ENTER) {
+            return false;
+        }
         view.next();
         return true;
     }

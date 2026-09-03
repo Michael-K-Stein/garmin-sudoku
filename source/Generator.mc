@@ -73,7 +73,7 @@ class Generator {
     hidden var cursor;
     hidden var attempt;
     hidden var clues;
-    hidden var work;           // work done, for a progress bar that only rises
+    hidden var maxPct;         // progress reported so far; never goes backwards
 
     // stillUnique's state, carried across step() calls while digCell != -1.
     hidden var digCell;        // cell currently being tested, or -1 between cells
@@ -86,7 +86,7 @@ class Generator {
         solver = new Solver();
         phase = P_BUILD;
         attempt = 0;
-        work = 0;
+        maxPct = 0;
         puzzle = null;
         solution = null;
         order = new Lang.Array<Lang.Number>[Cells.N];
@@ -166,8 +166,7 @@ class Generator {
                     var i = order[cursor];
                     cursor++;
                     var v = puzzle[i];
-                    if (v == 0) { continue; }      // already empty; no work here
-                    work++;
+                    if (v == 0) { continue; }      // already empty; nothing to test
                     puzzle[i] = 0;
                     digCell = i;
                     digV = v;
@@ -200,36 +199,56 @@ class Generator {
             var advanced = Difficulty.needsAdvanced(tier);
             if (target == 0) {
                 phase = P_DONE;
-                return 100;
-            }
-            for (var n = 0; n < CELLS_PER_STEP && cursor < Cells.N; n++) {
-                if (clues >= target && (advanced || Logic.solvableBySingles(puzzle))) {
-                    phase = P_DONE;
-                    return 100;
+            } else {
+                for (var n = 0; n < CELLS_PER_STEP && cursor < Cells.N; n++) {
+                    if (clues >= target && (advanced || Logic.solvableBySingles(puzzle))) {
+                        phase = P_DONE;
+                        break;
+                    }
+                    var i = order[cursor];
+                    cursor++;
+                    if (puzzle[i] != 0) { continue; }
+                    puzzle[i] = solution[i];
+                    if (advanced && Logic.solvableBySingles(puzzle)) {
+                        // This given hands the puzzle to plain scanning, which
+                        // is exactly what this tier promises not to do. Try
+                        // another.
+                        puzzle[i] = 0;
+                        continue;
+                    }
+                    clues++;
                 }
-                var i = order[cursor];
-                cursor++;
-                work++;
-                if (puzzle[i] != 0) { continue; }
-                puzzle[i] = solution[i];
-                if (advanced && Logic.solvableBySingles(puzzle)) {
-                    // This given hands the puzzle to plain scanning, which is
-                    // exactly what this tier promises not to do. Try another.
-                    puzzle[i] = 0;
-                    continue;
-                }
-                clues++;
+                if (cursor >= Cells.N) { phase = P_DONE; }
             }
-            if (cursor >= Cells.N) { phase = P_DONE; return 100; }
         }
 
-        if (phase == P_DONE) { return 100; }
+        if (phase == P_DONE) { maxPct = 100; return 100; }
+        return progressPct();
+    }
 
-        // Two digs is the expected cost, so scale against that and clamp: a
-        // bar that stalls at 96 reads better than one that jumps backwards
-        // every time an attempt restarts.
-        var pct = work * 100 / (Cells.N * 2);
-        return pct > 96 ? 96 : pct;
+    // DIG almost always runs to completion (it only stops early on a
+    // contradiction, which the puzzle never has), while ADDBACK usually
+    // finishes after replacing only a handful of clues - most of its cell
+    // order gets skipped, already full. Weighting them by their *own* span
+    // rather than one shared counter is what keeps the bar from stalling at
+    // whatever fraction ADDBACK happened to need before the puzzle was
+    // actually done. `maxPct` then keeps it from ever stepping backwards,
+    // which a restart from P_JUDGE back to P_BUILD would otherwise do.
+    static const DIG_SPAN = 85;
+
+    hidden function progressPct() as Lang.Number {
+        var raw;
+        if (phase == P_BUILD) {
+            raw = 0;
+        } else if (phase == P_DIG) {
+            raw = cursor * DIG_SPAN / Cells.N;
+        } else if (phase == P_JUDGE) {
+            raw = DIG_SPAN;
+        } else {
+            raw = DIG_SPAN + cursor * (100 - DIG_SPAN) / Cells.N;
+        }
+        if (raw > maxPct) { maxPct = raw; }
+        return maxPct;
     }
 
     function isDone() as Lang.Boolean {

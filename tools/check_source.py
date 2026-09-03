@@ -29,6 +29,9 @@ DIGIT_SAFE = re.compile(
         )$""",
     re.X)
 
+CLASS_RE = re.compile(r'class\s+(\w+)\s+extends\s+([\w.]+)\s*\{')
+ONSELECT_RE = re.compile(r'\bfunction\s+onSelect\s*\(')
+
 
 def source_files():
     for d in DIRS:
@@ -89,6 +92,48 @@ def check_font_metrics(rel, text, problems):
                             "dc.getFontHeight()" % (rel, n, m.group(1)))
 
 
+def find_class_bodies(text):
+    """Yield (name, base, body) for every top-level `class X extends Y { ... }`."""
+    for m in CLASS_RE.finditer(text):
+        name, base = m.group(1), m.group(2)
+        start = m.end()
+        depth = 1
+        i = start
+        while i < len(text) and depth > 0:
+            if text[i] == '{':
+                depth += 1
+            elif text[i] == '}':
+                depth -= 1
+            i += 1
+        yield name, base, text[start:i]
+
+
+def check_onselect_ontap_trap(rel, text, problems):
+    """On real Venu 2 hardware a screen tap arrives as *two* separate events:
+    onTap, with real coordinates, and the physical select behaviour,
+    onSelect, with none. A WatchUi.BehaviorDelegate that overrides onSelect
+    to do anything target-dependent runs that logic a second time,
+    unconditionally, right after every real tap - which is how a tap
+    anywhere on the board turned into "open the picker for whatever cell was
+    already selected" in BoardDelegate, and the same mistake independently
+    shipped in the sibling foundry, deep-shaft and garmin-survival projects.
+
+    The fix is always the same: hang the physical-button-only action off
+    onKey(WatchUi.KEY_ENTER) instead, which only the physical START/select
+    button actually produces, and drop onSelect entirely. onSelect itself
+    belongs to Menu2InputDelegate and ConfirmationDelegate, which react to a
+    chosen item rather than a raw screen event, and are unaffected."""
+    for name, base, body in find_class_bodies(text):
+        if base != "WatchUi.BehaviorDelegate":
+            continue
+        if ONSELECT_RE.search(body):
+            problems.append(
+                "%s: %s extends WatchUi.BehaviorDelegate and defines onSelect() - "
+                "a real screen tap also fires onSelect with no coordinates, so this "
+                "will re-run after every onTap. Move the physical-button action to "
+                "onKey(WatchUi.KEY_ENTER) instead." % (rel, name))
+
+
 def main():
     problems = []
     files = 0
@@ -99,6 +144,7 @@ def main():
         check_module_scope_visibility(rel, text, problems)
         check_numeric_fonts(rel, text, problems)
         check_font_metrics(rel, text, problems)
+        check_onselect_ontap_trap(rel, text, problems)
 
     if problems:
         for p in problems:

@@ -104,6 +104,7 @@ class DifficultyMenuDelegate extends WatchUi.Menu2InputDelegate {
         WatchUi.popView(WatchUi.SLIDE_RIGHT);
         Generation.begin(tier);
     }
+
 }
 
 //! The settings list. Every entry is a toggle, and every toggle is written
@@ -165,7 +166,13 @@ class PopDelegate extends WatchUi.BehaviorDelegate {
         return true;
     }
 
-    function onSelect() {
+    //! onKey, not onSelect: a real screen tap also fires the select
+    //! behaviour with no coordinates. Harmless here (both pop once), but
+    //! kept off onSelect for consistency with every other delegate.
+    function onKey(event as WatchUi.KeyEvent) {
+        if (event.getKey() != WatchUi.KEY_ENTER) {
+            return false;
+        }
         WatchUi.popView(WatchUi.SLIDE_RIGHT);
         return true;
     }

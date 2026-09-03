@@ -11,18 +11,37 @@ using Toybox.Graphics;
 //!          the square that is *already* selected opens the digit picker.
 //!          That second tap is what makes a mis-hit free - you see where you
 //!          landed before anything is entered.
-//!   swipe  fine. A swipe nudges the selection one square, so correcting a
-//!          mis-hit never means aiming at the same 30px target again.
+//!   swipe  fine, vertical only. A swipe up or down nudges the selection one
+//!          row, so correcting a mis-hit never means aiming at the same 30px
+//!          target again.
+//!   drag   fine, horizontal only. A held finger dragged left or right steps
+//!          the selection one column per DRAG_STEP_PX of travel. Horizontal
+//!          movement can't use swipe the way vertical does: on real Venu 2
+//!          hardware a left-to-right swipe never reaches onSwipe at all - the
+//!          system consumes it entirely as the back gesture and pops this
+//!          view, dead on arrival regardless of anything this delegate does.
+//!          A drag is a different, lower-level input (continuous position
+//!          while held, not a quick flick-and-release) and isn't claimed by
+//!          that gesture, which is what makes it usable here instead.
 //!
 //! The start button opens the picker for the current square, so the whole
 //! game is playable without touching the screen at all.
 class BoardDelegate extends WatchUi.BehaviorDelegate {
 
+    // How far (in pixels) a drag has to travel past its last step before it
+    // steps the selection another column. Small enough to feel responsive,
+    // large enough that the drag's own start jitter can't fire it by
+    // accident.
+    const DRAG_STEP_PX = 20;
+
     hidden var view;
+    hidden var dragOriginX;
+    hidden var dragOriginY;
 
     function initialize(boardView) {
         BehaviorDelegate.initialize();
         view = boardView;
+        dragOriginX = null;
     }
 
     hidden function session() as Session? {
@@ -65,22 +84,73 @@ class BoardDelegate extends WatchUi.BehaviorDelegate {
         if (s == null || s.selected < 0) { return true; }
         var d = evt.getDirection();
         var r = Cells.row(s.selected);
-        var c = Cells.col(s.selected);
 
-        if (d == WatchUi.SWIPE_LEFT && c < 8) { c++; }
-        else if (d == WatchUi.SWIPE_RIGHT && c > 0) { c--; }
-        else if (d == WatchUi.SWIPE_UP && r < 8) { r++; }
-        else if (d == WatchUi.SWIPE_DOWN && r > 0) { r--; }
+        // Horizontal is handled by onDrag instead - see the class comment.
+        if (d == WatchUi.SWIPE_UP && r > 0) { r--; }
+        else if (d == WatchUi.SWIPE_DOWN && r < 8) { r++; }
         else { return true; }
 
-        s.selected = r * 9 + c;
+        s.selected = r * 9 + Cells.col(s.selected);
+        view.refresh();
+        return true;
+    }
+
+    function onDrag(evt) {
+        var s = session();
+        if (s == null || s.selected < 0) { return true; }
+        var type = evt.getType();
+
+        if (type == WatchUi.DRAG_TYPE_STOP) {
+            dragOriginX = null;
+            return true;
+        }
+
+        var xy = evt.getCoordinates();
+        var x = xy[0];
+        var y = xy[1];
+
+        if (type == WatchUi.DRAG_TYPE_START || dragOriginX == null) {
+            dragOriginX = x;
+            dragOriginY = y;
+            return true;
+        }
+
+        var dx = x - dragOriginX;
+        var dy = y - dragOriginY;
+        // Not a clear enough horizontal move yet - a vertical drag is left
+        // for onSwipe, and a short jitter isn't a deliberate step.
+        if (dx.abs() < DRAG_STEP_PX || dx.abs() < dy.abs()) { return true; }
+
+        var c = Cells.col(s.selected);
+        if (dx > 0 && c < 8) { c++; }
+        else if (dx < 0 && c > 0) { c--; }
+
+        // Re-baseline here regardless of whether the column actually moved,
+        // so holding a drag at the left/right edge doesn't leave a huge
+        // accumulated dx that steps several columns the instant there is
+        // room to.
+        dragOriginX = x;
+        dragOriginY = y;
+
+        s.selected = Cells.row(s.selected) * 9 + c;
         view.refresh();
         return true;
     }
 
     // --- buttons ---------------------------------------------------------
 
-    function onSelect() {
+    //! Hangs off the raw key event, not onSelect: on real Venu 2 hardware a
+    //! screen tap also arrives as the select behaviour, with no coordinates.
+    //! An onSelect override opened the picker again after every real tap -
+    //! for whichever cell was already selected, regardless of where the
+    //! finger actually landed - which is why every tap looked like it always
+    //! targeted the current cell. onKey(KEY_ENTER) is reached only by the
+    //! physical select button, so the two gestures stay apart. (See the same
+    //! fix in the foundry app's GameDelegate.)
+    function onKey(event as WatchUi.KeyEvent) {
+        if (event.getKey() != WatchUi.KEY_ENTER) {
+            return false;
+        }
         openPicker();
         return true;
     }
